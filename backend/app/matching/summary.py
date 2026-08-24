@@ -78,11 +78,16 @@ def _role_sentence(role: Dict[str, Any]) -> str:
 
 
 def _education_sentence(edu: Dict[str, Any]) -> str:
-    degree = edu["highest_degree"] or "no degree listed"
-    base = f"Highest qualification: {degree}"
-    if edu["has_relevant_cert"]:
-        return base + ", plus a relevant certification."
-    return base + "."
+    degree = edu.get("highest_degree") or "no degree listed"
+    parts = [f"Highest qualification: {degree}"]
+    marks = []
+    if edu.get("tenth_percentage") is not None:
+        marks.append(f"class 10: {edu['tenth_percentage']:g}%")
+    if edu.get("twelfth_percentage") is not None:
+        marks.append(f"class 12: {edu['twelfth_percentage']:g}%")
+    if marks:
+        parts.append(" (" + ", ".join(marks) + ")")
+    return "".join(parts) + "."
 
 
 def _location_sentence(loc: Dict[str, Any]) -> str:

@@ -24,6 +24,9 @@ from .parsing.extractors import (
 
 random.seed(42)
 
+# Jobs without explicit min_age/max_age accept all ages.
+DEFAULT_AGE_CRITERIA = {"min_age": None, "max_age": None}
+
 JOBS = [
     dict(
         title="Backend Engineer",
@@ -105,6 +108,7 @@ JOBS = [
         required_skills=["javascript", "react", "node.js", "git"],
         min_experience_yrs=0, max_experience_yrs=1,
         required_education="Bachelor's", location="Bengaluru", job_type="internship",
+        min_age=18, max_age=25,
     ),
     dict(
         title="UI/UX Designer",
@@ -125,12 +129,14 @@ JOBS = [
         required_skills=["azure", "cloud architecture", "kubernetes", "security"],
         min_experience_yrs=6, max_experience_yrs=12,
         required_education="Bachelor's", location="Hyderabad", job_type="full-time",
+        min_age=28,
     ),
 ]
 
 CANDIDATES = [
     dict(
         email="priya.sharma@example.com", phone="+91-9876500001", full_name="Priya Sharma",
+        date_of_birth=date(1998, 3, 14), tenth_percentage=88.0, twelfth_percentage=91.0,
         current_location="Bengaluru", preferred_location="Bengaluru",
         headline="Backend engineer specializing in Python microservices",
         education=[{"degree": "B.Tech", "field_of_study": "Computer Science",
@@ -152,6 +158,7 @@ CANDIDATES = [
     ),
     dict(
         email="arjun.mehta@example.com", phone="+91-9876500002", full_name="Arjun Mehta",
+        date_of_birth=date(1996, 7, 2), tenth_percentage=92.5, twelfth_percentage=94.0,
         current_location="Hyderabad", preferred_location="Hyderabad",
         headline="Data scientist with a focus on NLP and predictive modeling",
         education=[{"degree": "M.Tech", "field_of_study": "Data Science",
@@ -173,6 +180,7 @@ CANDIDATES = [
     ),
     dict(
         email="sneha.iyer@example.com", phone="+91-9876500003", full_name="Sneha Iyer",
+        date_of_birth=date(1999, 11, 23), tenth_percentage=85.0, twelfth_percentage=87.5,
         current_location="Remote", preferred_location="Remote",
         headline="Frontend developer passionate about React and design systems",
         education=[{"degree": "B.E.", "field_of_study": "Information Technology",
@@ -193,6 +201,7 @@ CANDIDATES = [
     ),
     dict(
         email="rahul.verma@example.com", phone="+91-9876500004", full_name="Rahul Verma",
+        date_of_birth=date(2002, 5, 9), tenth_percentage=78.0, twelfth_percentage=81.0,
         current_location="Pune", preferred_location="Pune",
         headline="Recent graduate exploring software engineering roles",
         education=[{"degree": "B.Tech", "field_of_study": "Computer Science",
@@ -212,6 +221,7 @@ CANDIDATES = [
     ),
     dict(
         email="ananya.gupta@example.com", phone="+91-9876500005", full_name="Ananya Gupta",
+        date_of_birth=date(1989, 1, 30), tenth_percentage=90.0, twelfth_percentage=89.0,
         current_location="Bengaluru", preferred_location="Bengaluru",
         headline="Senior product manager with a decade of experience in B2B SaaS",
         education=[{"degree": "MBA", "field_of_study": "Marketing",
@@ -233,6 +243,7 @@ CANDIDATES = [
     ),
     dict(
         email="vikram.rao@example.com", phone="+91-9876500006", full_name="Vikram Rao",
+        date_of_birth=date(1997, 9, 17), tenth_percentage=72.0, twelfth_percentage=75.0,
         current_location="Chennai", preferred_location="Bengaluru",
         headline="Marketing specialist exploring a pivot into tech-adjacent roles",
         education=[{"degree": "Bachelor's", "field_of_study": "Business Administration",
@@ -287,7 +298,9 @@ def run():
 
             db.add(models.CandidateProfile(
                 user_id=user.id,
-                date_of_birth=date(1995, 1, 1),
+                date_of_birth=c["date_of_birth"],
+                tenth_percentage=c["tenth_percentage"],
+                twelfth_percentage=c["twelfth_percentage"],
                 current_location=c["current_location"],
                 preferred_location=c["preferred_location"],
                 headline=c["headline"],

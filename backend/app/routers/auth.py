@@ -24,7 +24,6 @@ def _user_out(db: Session, user: models.User) -> schemas.UserOut:
         role=user.role,
         phone=user.phone,
         profile_complete=profile_complete,
-        avatar_emoji=user.avatar_emoji,
     )
 
 
@@ -88,16 +87,4 @@ def login(payload: schemas.LoginRequest, db: Session = Depends(get_db)):
 
 @router.get("/me", response_model=schemas.UserOut)
 def me(user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
-    return _user_out(db, user)
-
-
-@router.patch("/me/avatar", response_model=schemas.UserOut)
-def update_avatar(
-    payload: schemas.AvatarUpdateRequest,
-    user: models.User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    user.avatar_emoji = payload.avatar_emoji
-    db.commit()
-    db.refresh(user)
     return _user_out(db, user)

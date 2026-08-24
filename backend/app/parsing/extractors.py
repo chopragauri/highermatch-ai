@@ -93,37 +93,69 @@ def _month_index(month_str: Any, default: int = 6) -> int:
     return _MONTHS.get(month_str.lower(), default)
 
 
-def extract_experience_years(raw_text: str) -> float:
-    raw_text = raw_text or ""
-    explicit = [float(m) for m in _EXPLICIT_EXP_RE.findall(raw_text)]
-    explicit_max = max(explicit) if explicit else 0.0
+# Roles matching these are excluded from the experience total — an internship is
+# training, not professional tenure, and counting it inflates a fresher's years.
+_INTERNSHIP_MARKERS = ("intern", "internship", "trainee", "apprentice", "co-op")
 
+# How many lines after a date range to scan for the role title. Resumes commonly put
+# the company+dates on one line and the job title on the next, so the "Intern" marker
+# sits below the date it belongs to rather than on the same line.
+_ROLE_CONTEXT_LINES = 2
+
+
+def _range_is_internship(work_lines: list, line_index: int) -> bool:
+    window = work_lines[line_index : line_index + 1 + _ROLE_CONTEXT_LINES]
+    blob = " ".join(window).lower()
+    return any(marker in blob for marker in _INTERNSHIP_MARKERS)
+
+
+def extract_experience_years(raw_text: str) -> float:
+    """
+    Total professional experience in years, parsed ONLY from this resume's own text.
+    Internship/trainee roles are deliberately excluded.
+    """
+    raw_text = raw_text or ""
     now = datetime.datetime.now()
     work_section = _work_experience_section(raw_text)
+    work_lines = work_section.split("\n")
 
     total_months = 0
-    for m in _DATE_RANGE_RE.finditer(work_section):
-        start_year = int(m.group("start_year"))
-        start_month = _month_index(m.group("start_month"))
-        end_raw = m.group("end_year")
-        if end_raw.lower() in ("present", "current"):
-            end_year, end_month = now.year, now.month
-        else:
-            end_year = int(end_raw)
-            # Same default (June) as the start month — an asymmetric default here
-            # (e.g. December) would silently add 6 phantom months to every bare
-            # "2020-2024"-style range with no month info on either side.
-            end_month = _month_index(m.group("end_month"))
+    for line_index, line in enumerate(work_lines):
+        if _range_is_internship(work_lines, line_index):
+            continue
+        for m in _DATE_RANGE_RE.finditer(line):
+            start_year = int(m.group("start_year"))
+            start_month = _month_index(m.group("start_month"))
+            end_raw = m.group("end_year")
+            if end_raw.lower() in ("present", "current"):
+                end_year, end_month = now.year, now.month
+            else:
+                end_year = int(end_raw)
+                # Same default (June) as the start month — an asymmetric default here
+                # (e.g. December) would silently add 6 phantom months to every bare
+                # "2020-2024"-style range with no month info on either side.
+                end_month = _month_index(m.group("end_month"))
 
-        months = (end_year - start_year) * 12 + (end_month - start_month)
-        if months > 0:
-            total_months += months
+            months = (end_year - start_year) * 12 + (end_month - start_month)
+            if months > 0:
+                total_months += months
 
     ranges_total = round(total_months / 12, 1)
 
-    # Two independent heuristics because resumes are inconsistent about stating
-    # experience explicitly vs. only listing date ranges — take whichever is larger.
-    return round(max(explicit_max, ranges_total), 1)
+    # An explicit "N years of experience" claim is only trusted when it does not
+    # contradict the dated roles we could actually verify. Taking an unconditional
+    # max() let a summary line like "two completed internships ... 3 years experience"
+    # reintroduce exactly the internship time the date scan just excluded.
+    explicit = [float(m) for m in _EXPLICIT_EXP_RE.findall(raw_text)]
+    if explicit and total_months == 0 and not _mentions_internship(raw_text):
+        return round(max(explicit), 1)
+
+    return ranges_total
+
+
+def _mentions_internship(text: str) -> bool:
+    lowered = (text or "").lower()
+    return any(marker in lowered for marker in _INTERNSHIP_MARKERS)
 
 
 _DEGREE_KEYWORDS = [

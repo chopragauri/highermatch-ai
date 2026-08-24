@@ -8,6 +8,7 @@ Education+Certification 10% / Location 5%.
 
 from typing import Any, Dict, List, Optional, Tuple
 
+from ..ages import check_age_eligibility
 from .embeddings import cosine_similarity, get_model
 from .llm_summary import generate_llm_summary
 from .summary import generate_summary
@@ -101,48 +102,96 @@ def score_role_responsibility(
     return rescaled, {"cosine_similarity": round(float(cos_sim), 4), "rescaled_score": rescaled}
 
 
-EDU_TIER = {"phd": 4, "master": 3, "mba": 3, "bachelor": 2, "diploma": 1}
+# Degree -> tier. Must cover every option in the frontend's DEGREE_OPTIONS dropdown
+# (lib/degrees.ts), since education is now sourced from the profile where the degree
+# is chosen from that exact list. A looser map that only knew "bachelor"/"master"
+# silently scored "B.Tech" as no-degree-at-all.
+EDU_TIER_EXACT = {
+    "diploma": 1,
+    "bachelor's": 2, "bachelors": 2, "bachelor": 2,
+    "b.tech": 2, "btech": 2, "b.e.": 2, "be": 2, "b.sc": 2, "bsc": 2,
+    "bca": 2, "bba": 2, "b.com": 2, "bcom": 2, "b.a.": 2, "ba": 2,
+    "master's": 3, "masters": 3, "master": 3,
+    "m.tech": 3, "mtech": 3, "m.e.": 3, "me": 3, "m.sc": 3, "msc": 3,
+    "mca": 3, "mba": 3, "m.com": 3, "mcom": 3, "m.a.": 3, "ma": 3,
+    "phd": 4, "ph.d": 4, "ph.d.": 4, "doctorate": 4,
+}
+
+# Fallback substring probes, longest-first so "m.tech" wins before a bare "tech"
+# and "master" before "ma". Only consulted when the exact lookup misses.
+EDU_TIER_CONTAINS = [
+    ("doctorate", 4), ("phd", 4), ("ph.d", 4),
+    ("m.tech", 3), ("mtech", 3), ("m.sc", 3), ("msc", 3), ("mba", 3),
+    ("mca", 3), ("master", 3),
+    ("b.tech", 2), ("btech", 2), ("b.sc", 2), ("bsc", 2), ("bca", 2),
+    ("bba", 2), ("bachelor", 2),
+    ("diploma", 1),
+]
+
+# Kept as an alias so any external reference to the old name still resolves.
+EDU_TIER = EDU_TIER_EXACT
 
 
 def _tier_of(label: Optional[str]) -> int:
     if not label:
         return 0
-    label_lower = label.lower()
-    for key, tier in EDU_TIER.items():
-        if key in label_lower:
+    normalized = label.strip().lower()
+    if normalized in EDU_TIER_EXACT:
+        return EDU_TIER_EXACT[normalized]
+    for key, tier in EDU_TIER_CONTAINS:
+        if key in normalized:
             return tier
     return 0
 
 
 def score_education(
-    parsed_education: List[Dict[str, Any]],
-    certifications: List[str],
+    profile_education: List[Dict[str, Any]],
+    tenth_percentage: Optional[float],
+    twelfth_percentage: Optional[float],
     required_education: Optional[str],
 ) -> Tuple[float, Dict[str, Any]]:
+    """
+    Education is sourced ENTIRELY from the candidate's registration profile — never
+    from the resume. Structured self-declared data (a chosen degree, a numeric
+    percentage) is far more reliable than regex-guessing a degree out of PDF text,
+    and keeping a single source per sub-score is what prevents the two from
+    disagreeing about the same candidate.
+
+    Breakdown of the 100 points: degree tier 60, class 10 pct 20, class 12 pct 20.
+    """
     highest_tier = 0
     highest_degree = None
-    for edu in parsed_education or []:
+    for edu in profile_education or []:
         tier = edu.get("tier") or _tier_of(edu.get("degree"))
         if tier > highest_tier:
             highest_tier = tier
             highest_degree = edu.get("degree")
 
     required_tier = _tier_of(required_education)
-
     if required_tier == 0:
-        base = 70.0 if highest_tier > 0 else 40.0
+        degree_points = 60.0 if highest_tier > 0 else 30.0
     elif highest_tier >= required_tier:
-        base = 70.0
+        degree_points = 60.0
     else:
-        base = 70.0 * (highest_tier / required_tier)
+        degree_points = 60.0 * (highest_tier / required_tier)
 
-    has_cert = bool(certifications)
-    score = min(100.0, base + (30.0 if has_cert else 0.0))
+    tenth = float(tenth_percentage) if tenth_percentage is not None else None
+    twelfth = float(twelfth_percentage) if twelfth_percentage is not None else None
+    tenth_points = (tenth / 100.0) * 20.0 if tenth is not None else 0.0
+    twelfth_points = (twelfth / 100.0) * 20.0 if twelfth is not None else 0.0
+
+    score = min(100.0, degree_points + tenth_points + twelfth_points)
 
     return score, {
         "highest_degree": highest_degree,
         "required_degree": required_education,
-        "has_relevant_cert": has_cert,
+        "tenth_percentage": tenth,
+        "twelfth_percentage": twelfth,
+        # Retained so existing summary/UI code that reads this key keeps working;
+        # certifications are still parsed from the resume for display, but they no
+        # longer feed the score (that would re-mix resume data into a profile-sourced
+        # sub-score, which is exactly the overlap we are eliminating).
+        "has_relevant_cert": False,
     }
 
 
@@ -176,18 +225,21 @@ def score_location(
     }
 
 
-def compute_match(
-    resume, job, candidate_location: Optional[str] = None, use_llm: bool = False
-) -> Dict[str, Any]:
+def compute_match(resume, job, profile=None, use_llm: bool = False) -> Dict[str, Any]:
     """
-    `resume` and `job` are SQLAlchemy model instances (models.Resume, models.JobPosting).
-    Returns {"total": float, "breakdown": dict, "summary": str, "ai_generated": bool}.
+    `resume`, `job`, `profile` are model instances (Resume, JobPosting, CandidateProfile).
 
-    `use_llm=True` tries a Groq rewrite of the summary (falls back silently to the
-    template version on any failure). Deliberately opt-in and off by default: the
-    search endpoint calls compute_match once per open job per request, and firing an
-    LLM call for every row of a search results page would be slow and wasteful. Only
-    single-job call sites (the match-detail view, applying) pass use_llm=True.
+    Each sub-score has exactly ONE source, deliberately — no field is ever read from
+    both the resume and the profile, so the two can never disagree about a candidate:
+
+      Skills (40%)     <- resume only  (parsed_skills)
+      Experience (25%) <- resume only  (parsed_experience_yrs, internships excluded)
+      Role match (20%) <- resume only  (embedding vs job responsibilities)
+      Education (10%)  <- profile only (degree, class 10 %, class 12 %)
+      Location (5%)    <- profile only (preferred, falling back to current)
+
+    Age eligibility is returned alongside the score but is NOT one of the weighted
+    components — it is a hard gate enforced at apply time (see routers/applications).
     """
     skills_score, skills_detail = score_skills(resume.parsed_skills, job.required_skills)
     experience_score, exp_detail = score_experience(
@@ -196,9 +248,18 @@ def compute_match(
     role_score, role_detail = score_role_responsibility(
         resume.resume_embedding, job.responsibilities_embedding
     )
+
+    profile_education = getattr(profile, "education", None) or []
     education_score, edu_detail = score_education(
-        resume.parsed_education, resume.parsed_certifications, job.required_education
+        profile_education,
+        getattr(profile, "tenth_percentage", None),
+        getattr(profile, "twelfth_percentage", None),
+        job.required_education,
     )
+
+    candidate_location = None
+    if profile is not None:
+        candidate_location = profile.preferred_location or profile.current_location
     location_score, loc_detail = score_location(candidate_location, job.location)
 
     total = (
@@ -209,6 +270,10 @@ def compute_match(
         + location_score * WEIGHTS["location"]
     )
     total = round(total, 2)
+
+    age_eligible, age_reason = check_age_eligibility(
+        getattr(profile, "date_of_birth", None), job.min_age, job.max_age
+    )
 
     summary = generate_summary(skills_detail, exp_detail, role_detail, edu_detail, loc_detail, total)
 
@@ -236,4 +301,11 @@ def compute_match(
         "weights": WEIGHTS,
     }
 
-    return {"total": total, "breakdown": breakdown, "summary": summary, "ai_generated": ai_generated}
+    return {
+        "total": total,
+        "breakdown": breakdown,
+        "summary": summary,
+        "ai_generated": ai_generated,
+        "age_eligible": age_eligible,
+        "age_ineligible_reason": age_reason,
+    }

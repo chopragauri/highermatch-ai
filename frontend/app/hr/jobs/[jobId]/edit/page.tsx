@@ -23,6 +23,8 @@ export default function EditJobPage() {
           min_experience_yrs: String(job.min_experience_yrs),
           max_experience_yrs: job.max_experience_yrs != null ? String(job.max_experience_yrs) : "",
           required_education: job.required_education || "",
+          min_age: job.min_age != null ? String(job.min_age) : "",
+          max_age: job.max_age != null ? String(job.max_age) : "",
           location: job.location,
           job_type: job.job_type,
         });

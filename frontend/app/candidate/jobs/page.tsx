@@ -17,6 +17,8 @@ type SearchResult = {
     total: number;
     summary: string;
     breakdown: Record<string, any>;
+    age_eligible?: boolean;
+    age_ineligible_reason?: string | null;
   };
 };
 
@@ -205,6 +207,8 @@ export default function CandidateJobsPage() {
               </a>
               {appliedIds.has(r.job.id) ? (
                 <span className="text-sm text-green-700">Applied ✓</span>
+              ) : r.match.age_eligible === false ? (
+                <span className="text-sm text-amber-700">Not age-eligible</span>
               ) : (
                 <button
                   onClick={() => handleApply(r.job.id)}

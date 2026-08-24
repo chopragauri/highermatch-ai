@@ -33,11 +33,8 @@ def get_match(
         .filter(models.CandidateProfile.user_id == candidate.id)
         .first()
     )
-    candidate_location = (
-        (profile.preferred_location or profile.current_location) if profile else None
-    )
 
     # use_llm=True here is safe — this endpoint is called for one job at a time
     # (the job detail page), never for a whole search results list.
-    match = compute_match(resume, job, candidate_location, use_llm=True)
+    match = compute_match(resume, job, profile, use_llm=True)
     return schemas.MatchBreakdown(**match)

@@ -26,6 +26,8 @@ def create_job(
         min_experience_yrs=payload.min_experience_yrs,
         max_experience_yrs=payload.max_experience_yrs,
         required_education=payload.required_education,
+        min_age=payload.min_age,
+        max_age=payload.max_age,
         location=payload.location,
         job_type=payload.job_type,
         responsibilities_embedding=embed_text(payload.responsibilities).tolist(),
@@ -84,14 +86,10 @@ def search_jobs(
         .filter(models.CandidateProfile.user_id == candidate.id)
         .first()
     )
-    candidate_location = (
-        (profile.preferred_location or profile.current_location) if profile else None
-    )
-
     results = []
     for job in jobs:
         if resume:
-            match = compute_match(resume, job, candidate_location)
+            match = compute_match(resume, job, profile)
         else:
             match = {
                 "total": 0.0,
@@ -145,6 +143,8 @@ def update_job(
     job.min_experience_yrs = payload.min_experience_yrs
     job.max_experience_yrs = payload.max_experience_yrs
     job.required_education = payload.required_education
+    job.min_age = payload.min_age
+    job.max_age = payload.max_age
     job.location = payload.location
     job.job_type = payload.job_type
     job.responsibilities_embedding = embed_text(payload.responsibilities).tolist()

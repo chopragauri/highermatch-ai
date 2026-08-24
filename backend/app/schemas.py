@@ -1,7 +1,9 @@
 from datetime import date, datetime
 from typing import Annotated, Any, Dict, List, Optional
 
-from pydantic import BaseModel, BeforeValidator, EmailStr, Field, field_validator
+from pydantic import BaseModel, BeforeValidator, EmailStr, Field, field_validator, model_validator
+
+from .ages import MAX_CANDIDATE_AGE, MIN_CANDIDATE_AGE, _age_from_dob
 
 # SQLAlchemy returns UUID objects for UUID-typed columns; Pydantic v2's `str` field
 # does not auto-coerce those, so every id field uses this alias to stringify first.
@@ -15,14 +17,9 @@ class UserOut(BaseModel):
     role: str
     phone: Optional[str] = None
     profile_complete: Optional[bool] = None
-    avatar_emoji: Optional[str] = None
 
     class Config:
         from_attributes = True
-
-
-class AvatarUpdateRequest(BaseModel):
-    avatar_emoji: str = Field(min_length=1, max_length=8)
 
 
 class RegisterRequest(BaseModel):
@@ -52,23 +49,52 @@ class TokenResponse(BaseModel):
 
 
 class EducationEntry(BaseModel):
-    degree: str
+    degree: str = Field(min_length=1)
     field_of_study: Optional[str] = None
-    institution: Optional[str] = None
-    start_year: Optional[int] = None
-    end_year: Optional[int] = None
+    institution: str = Field(min_length=1)
+    start_year: int = Field(ge=1950, le=2100)
+    end_year: int = Field(ge=1950, le=2100)
     grade: Optional[str] = None
+
+    @model_validator(mode="after")
+    def years_ordered(self):
+        if self.end_year < self.start_year:
+            raise ValueError("end_year cannot be before start_year")
+        return self
 
 
 class CandidateProfileRequest(BaseModel):
-    date_of_birth: Optional[date] = None
+    """Server-side validation mirrors the client form exactly — the browser checks are
+    a convenience, this is the actual gate. Only gender and headline are optional."""
+
+    date_of_birth: date
     gender: Optional[str] = None
-    current_location: str
-    preferred_location: Optional[str] = None
-    headline: Optional[str] = None
+    current_location: str = Field(min_length=1, max_length=120)
+    preferred_location: str = Field(min_length=1, max_length=120)
+    headline: Optional[str] = Field(default=None, max_length=200)
+    tenth_percentage: float = Field(ge=0, le=100)
+    twelfth_percentage: float = Field(ge=0, le=100)
     education: List[EducationEntry] = Field(min_length=1)
-    self_reported_skills: List[str] = Field(default_factory=list)
-    total_experience_yrs: Optional[float] = None
+    self_reported_skills: List[str] = Field(min_length=1)
+    total_experience_yrs: float = Field(ge=0, le=60)
+
+    @field_validator("date_of_birth")
+    @classmethod
+    def dob_realistic(cls, v: date) -> date:
+        age = _age_from_dob(v)
+        if age < MIN_CANDIDATE_AGE:
+            raise ValueError(f"Candidates must be at least {MIN_CANDIDATE_AGE} years old")
+        if age > MAX_CANDIDATE_AGE:
+            raise ValueError("Date of birth is not valid")
+        return v
+
+    @field_validator("self_reported_skills")
+    @classmethod
+    def skills_non_empty(cls, v: List[str]) -> List[str]:
+        cleaned = [s.strip() for s in v if s.strip()]
+        if not cleaned:
+            raise ValueError("At least one skill is required")
+        return cleaned
 
 
 class CandidateProfileOut(BaseModel):
@@ -77,6 +103,8 @@ class CandidateProfileOut(BaseModel):
     current_location: Optional[str] = None
     preferred_location: Optional[str] = None
     headline: Optional[str] = None
+    tenth_percentage: Optional[float] = None
+    twelfth_percentage: Optional[float] = None
     education: List[Dict[str, Any]] = Field(default_factory=list)
     self_reported_skills: List[str] = Field(default_factory=list)
     total_experience_yrs: Optional[float] = None
@@ -87,13 +115,15 @@ class CandidateProfileOut(BaseModel):
 
 
 class JobCreateRequest(BaseModel):
-    title: str
-    responsibilities: str
-    required_skills: List[str]
-    min_experience_yrs: float = 0
-    max_experience_yrs: Optional[float] = None
+    title: str = Field(min_length=2, max_length=120)
+    responsibilities: str = Field(min_length=20)
+    required_skills: List[str] = Field(min_length=1)
+    min_experience_yrs: float = Field(default=0, ge=0, le=60)
+    max_experience_yrs: Optional[float] = Field(default=None, ge=0, le=60)
     required_education: Optional[str] = None
-    location: str
+    min_age: Optional[int] = Field(default=None, ge=MIN_CANDIDATE_AGE, le=MAX_CANDIDATE_AGE)
+    max_age: Optional[int] = Field(default=None, ge=MIN_CANDIDATE_AGE, le=MAX_CANDIDATE_AGE)
+    location: str = Field(min_length=1, max_length=120)
     job_type: str
 
     @field_validator("job_type")
@@ -102,6 +132,22 @@ class JobCreateRequest(BaseModel):
         if v not in ("full-time", "part-time", "contract", "internship"):
             raise ValueError("invalid job_type")
         return v
+
+    @field_validator("required_skills")
+    @classmethod
+    def skills_non_empty(cls, v: List[str]) -> List[str]:
+        cleaned = [s.strip() for s in v if s.strip()]
+        if not cleaned:
+            raise ValueError("At least one required skill is needed")
+        return cleaned
+
+    @model_validator(mode="after")
+    def ranges_ordered(self):
+        if self.max_experience_yrs is not None and self.max_experience_yrs < self.min_experience_yrs:
+            raise ValueError("max_experience_yrs cannot be less than min_experience_yrs")
+        if self.min_age is not None and self.max_age is not None and self.max_age < self.min_age:
+            raise ValueError("max_age cannot be less than min_age")
+        return self
 
 
 class JobOut(BaseModel):
@@ -112,6 +158,8 @@ class JobOut(BaseModel):
     min_experience_yrs: float
     max_experience_yrs: Optional[float] = None
     required_education: Optional[str] = None
+    min_age: Optional[int] = None
+    max_age: Optional[int] = None
     location: str
     job_type: str
     status: str
@@ -126,6 +174,8 @@ class MatchBreakdown(BaseModel):
     breakdown: Dict[str, Any]
     summary: str
     ai_generated: bool = False
+    age_eligible: bool = True
+    age_ineligible_reason: Optional[str] = None
 
 
 class JobSearchResult(BaseModel):

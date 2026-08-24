@@ -7,6 +7,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    Integer,
     LargeBinary,
     Numeric,
     String,
@@ -29,7 +30,6 @@ class User(Base):
     password_hash = Column(String, nullable=False)
     role = Column(String, nullable=False)  # 'hr' | 'candidate'
     full_name = Column(String, nullable=False)
-    avatar_emoji = Column(String, nullable=True)
     org_domain = Column(String, nullable=True)  # set for HR users, derived from email
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -56,6 +56,8 @@ class CandidateProfile(Base):
     current_location = Column(String, nullable=True)
     preferred_location = Column(String, nullable=True)
     headline = Column(String, nullable=True)
+    tenth_percentage = Column(Numeric(5, 2), nullable=True)
+    twelfth_percentage = Column(Numeric(5, 2), nullable=True)
     # [{degree, field_of_study, institution, start_year, end_year, grade}]
     education = Column(JSONB, nullable=False, default=list)
     self_reported_skills = Column(ARRAY(String), nullable=False, default=list)
@@ -77,6 +79,9 @@ class JobPosting(Base):
     min_experience_yrs = Column(Numeric(4, 1), nullable=False, default=0)
     max_experience_yrs = Column(Numeric(4, 1), nullable=True)
     required_education = Column(String, nullable=True)
+    # Age eligibility criteria — enforced as a hard block on apply, not just scored.
+    min_age = Column(Integer, nullable=True)
+    max_age = Column(Integer, nullable=True)
     location = Column(String, nullable=False)
     job_type = Column(String, nullable=False)
     status = Column(String, nullable=False, default="open")

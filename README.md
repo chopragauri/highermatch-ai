@@ -3,13 +3,11 @@
 Micron/NCG hackathon project. See [`PRD.md`](./PRD.md) for requirements and [`ARCHITECTURE.md`](./ARCHITECTURE.md)
 for the full technical design and 24-hour build plan.
 
-**Status:** Backend (auth, job CRUD, resume parsing, AI matching, applications, applicant
-status) is built, tested, and verified end-to-end against a real Postgres database.
-Frontend is built and verified in-browser for: auth (register with HR domain gating,
-login), candidate profile completion, HR job posting (create/edit/close), HR applicant
-review (ranked list + shortlist/reject), and candidate job search (filters + sort +
-match badges + apply). **Resume upload UI is the one piece still missing** — search/apply
-currently rely on whichever resume is already on file (the seeded demo accounts have one).
+**Status:** Feature-complete for the brief and verified end-to-end against a real
+Postgres database. Covers both roles: HR (job posting with age eligibility criteria,
+ranked applicant review, analytics dashboard) and candidates (registration, profile,
+resume upload, search with filters + best-match sorting, apply). Runs locally — this is
+not deployed anywhere.
 
 ## What's implemented right now
 
@@ -19,9 +17,10 @@ currently rely on whichever resume is already on file (the seeded demo accounts 
     server-side in `app/routers/auth.py`, not just hidden in the UI.
   - **Candidate registration** requires email + phone + password up front, then a separate
     profile-completion step (`PUT /api/candidates/me/profile`) collects personal details
-    (DOB, gender, current/preferred location, headline) and education (degree, field,
-    institution, years, grade) — modeled on what Naukri/LinkedIn/Indeed collect for
-    matching-relevant profile data.
+    (DOB, gender, current/preferred location, headline), class 10 and 12 percentages, and
+    education (degree, specialization, institution, years, grade) — modeled on what
+    Naukri/LinkedIn/Indeed collect. Only gender and headline are optional; everything
+    else is required on both client and server.
 - **Job CRUD** for HR, with a **search endpoint** (`GET /api/jobs/search`) that supports
   role/skill/location/experience filters, all combinable, and **defaults to sorting by
   highest AI match % first** (`sort=match_desc`).
@@ -29,9 +28,22 @@ currently rely on whichever resume is already on file (the seeded demo accounts 
   project keywords, all via `app/parsing/`, no LLM calls.
 - **AI matching engine** (`app/matching/`): the exact weighted formula from the brief
   (Skills 40% / Experience 25% / Role Responsibility 20% / Education 10% / Location 5%),
-  using local `sentence-transformers` embeddings for the semantic pieces. Every score
-  ships with a deterministic, template-generated **plain-language explanation**
-  (`app/matching/summary.py`) — not just a number.
+  using local `sentence-transformers` embeddings for the semantic pieces.
+  **Every sub-score has exactly one data source** — skills, experience and role
+  relevance come only from the parsed resume; education (degree, class 10 %, class 12 %)
+  and location come only from the registration profile. No field is read from both, so
+  the two can never disagree about the same candidate.
+- **Age eligibility criteria**: HR can set a min/max age per posting. Out-of-range
+  candidates are blocked from applying — enforced server-side in
+  `routers/applications.py`, not just hidden in the UI.
+- **Internships excluded from experience**: `parsing/extractors.py` skips
+  intern/trainee/apprentice roles when summing tenure, so a fresher with two
+  internships correctly reads as 0 years rather than inflating their seniority.
+- **Explainable scores**: every score ships with a deterministic, template-generated
+  **plain-language explanation** (`app/matching/summary.py`) — not just a number.
+- **Validation on both sides**: every form is validated in the browser for fast feedback
+  AND re-validated server-side in `app/schemas.py`, which is the actual gate — the
+  browser checks can be bypassed entirely by posting straight to the API.
 - **Optional Groq LLM enhancement** (`app/matching/llm_summary.py`): when `GROQ_API_KEY`
   is set, the explanation is rewritten into more natural language by Groq. **Scores are
   never touched** — the local weighted formula stays the sole source of truth for every

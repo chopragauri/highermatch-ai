@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { jobTypeLabel } from "@/lib/format";
+import HrTabs from "@/components/HrTabs";
 
 type Job = {
   id: string;
@@ -36,12 +37,8 @@ export default function HrDashboard() {
 
   return (
     <main className="mx-auto max-w-3xl p-8">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Welcome, {user.full_name}</h1>
-        <a href="/hr/analytics" className="text-sm underline">
-          View analytics
-        </a>
-      </div>
+      <h1 className="mb-4 text-2xl font-semibold">Welcome, {user.full_name}</h1>
+      <HrTabs />
 
       <div className="mb-6 flex items-center justify-between">
         <h2 className="text-lg font-medium">Your job postings</h2>
