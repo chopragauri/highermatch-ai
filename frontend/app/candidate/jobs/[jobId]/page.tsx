@@ -13,6 +13,8 @@ type Job = {
   min_experience_yrs: number;
   max_experience_yrs: number | null;
   required_education: string | null;
+  min_age: number | null;
+  max_age: number | null;
   location: string;
   job_type: string;
   status: string;
@@ -22,6 +24,9 @@ type MatchBreakdown = {
   total: number;
   breakdown: Record<string, any>;
   summary: string;
+  ai_generated?: boolean;
+  age_eligible?: boolean;
+  age_ineligible_reason?: string | null;
 };
 
 export default function JobDetailPage() {
@@ -84,6 +89,9 @@ export default function JobDetailPage() {
             {job.location} · {jobTypeLabel(job.job_type)} · {job.min_experience_yrs}
             {job.max_experience_yrs != null ? `–${job.max_experience_yrs}` : "+"} yrs
             {job.required_education ? ` · ${job.required_education}` : ""}
+            {job.min_age != null || job.max_age != null
+              ? ` · age ${job.min_age ?? "any"}–${job.max_age ?? "any"}`
+              : ""}
           </p>
         </div>
         {match && match.total > 0 && (
@@ -120,7 +128,13 @@ export default function JobDetailPage() {
         )}
         {match && match.total > 0 && (
           <>
-            <p className="mb-3 text-sm text-neutral-700">{match.summary}</p>
+            <p className="mb-2 text-sm text-neutral-700">{match.summary}</p>
+            {match.ai_generated && (
+              <p className="mb-3 text-xs text-neutral-400">
+                ✨ Explanation written by AI. Scores are computed locally and are not
+                affected by it.
+              </p>
+            )}
             <MatchBreakdownBars breakdown={match.breakdown} />
           </>
         )}
@@ -131,6 +145,11 @@ export default function JobDetailPage() {
       {checkingApplied ? null : applied ? (
         <p className="rounded-md bg-green-50 p-3 text-sm text-green-800">
           Applied successfully ✓
+        </p>
+      ) : match && match.age_eligible === false ? (
+        <p className="rounded-md bg-amber-50 p-3 text-sm text-amber-800">
+          You aren&apos;t eligible to apply for this role.{" "}
+          {match.age_ineligible_reason}
         </p>
       ) : (
         <button

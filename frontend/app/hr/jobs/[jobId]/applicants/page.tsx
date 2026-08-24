@@ -13,6 +13,7 @@ type Applicant = {
   match_score_total: number;
   match_score_breakdown: Record<string, any>;
   match_summary_text: string;
+  ai_generated?: boolean;
   status: string;
 };
 
@@ -95,6 +96,12 @@ export default function ApplicantsPage() {
             {expanded === a.id && (
               <div className="mt-2 space-y-3 rounded-md bg-neutral-50 p-3">
                 <p className="text-sm text-neutral-700">{a.match_summary_text}</p>
+                {a.ai_generated && (
+                  <p className="text-xs text-neutral-400">
+                    ✨ Explanation written by AI. Scores are computed locally and are not
+                    affected by it.
+                  </p>
+                )}
                 <MatchBreakdownBars breakdown={a.match_score_breakdown} />
               </div>
             )}

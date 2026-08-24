@@ -55,11 +55,15 @@ def apply(
         .filter(models.CandidateProfile.user_id == candidate.id)
         .first()
     )
-    candidate_location = (
-        (profile.preferred_location or profile.current_location) if profile else None
-    )
+    # One-time call, and the result is persisted (both the candidate and HR will read
+    # match_summary_text off this row later), so the Groq rewrite is worth it here —
+    # unlike search, this isn't called once per job in a list.
+    match = compute_match(resume, job, profile, use_llm=True)
 
-    match = compute_match(resume, job, candidate_location)
+    # Hard gate: age eligibility is enforced here, not just shown in the UI. The
+    # frontend disables the button, but a request can always be sent directly.
+    if not match["age_eligible"]:
+        raise HTTPException(status_code=403, detail=match["age_ineligible_reason"])
 
     application = models.Application(
         job_id=job.id,
@@ -68,6 +72,7 @@ def apply(
         match_score_total=match["total"],
         match_score_breakdown=match["breakdown"],
         match_summary_text=match["summary"],
+        ai_generated=match["ai_generated"],
     )
     db.add(application)
     db.commit()
@@ -95,6 +100,7 @@ def my_applications(
             job_status=job.status,
             match_score_total=float(app.match_score_total),
             match_summary_text=app.match_summary_text,
+            ai_generated=app.ai_generated,
             status=app.status,
             applied_at=app.applied_at,
         )

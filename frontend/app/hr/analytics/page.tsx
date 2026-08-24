@@ -15,6 +15,7 @@ import {
   YAxis,
 } from "recharts";
 import { apiFetch } from "@/lib/api";
+import HrTabs from "@/components/HrTabs";
 
 type Analytics = {
   total_jobs: number;
@@ -70,12 +71,8 @@ export default function HrAnalyticsPage() {
 
   return (
     <main className="mx-auto max-w-4xl p-8">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Analytics</h1>
-        <a href="/hr" className="text-sm underline">
-          Back to dashboard
-        </a>
-      </div>
+      <h1 className="mb-4 text-2xl font-semibold">Analytics</h1>
+      <HrTabs />
 
       <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatCard label="Total jobs" value={data.total_jobs} />

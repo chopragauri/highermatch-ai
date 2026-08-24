@@ -31,6 +31,8 @@ export default function CandidateProfilePage() {
     preferred_location: "",
     headline: "",
     total_experience_yrs: "",
+    tenth_percentage: "",
+    twelfth_percentage: "",
   });
   const [skillsInput, setSkillsInput] = useState("");
   const [education, setEducation] = useState<EducationEntry[]>([{ ...emptyEducation }]);
@@ -49,9 +51,56 @@ export default function CandidateProfilePage() {
     setEducation((prev) => prev.filter((_, i) => i !== index));
   }
 
+  // Mirrors the server rules in schemas.CandidateProfileRequest. The server
+  // re-validates independently — this exists so users see errors before a round-trip.
+  function validate(): string | null {
+    if (!form.date_of_birth) return "Date of birth is required.";
+    const age = Math.floor(
+      (Date.now() - new Date(form.date_of_birth).getTime()) / (365.25 * 24 * 3600 * 1000)
+    );
+    if (age < 16) return "You must be at least 16 years old.";
+    if (age > 100) return "Please enter a valid date of birth.";
+
+    if (!form.current_location.trim()) return "Current location is required.";
+    if (!form.preferred_location.trim()) return "Preferred job location is required.";
+
+    for (const field of ["tenth_percentage", "twelfth_percentage"] as const) {
+      const label = field === "tenth_percentage" ? "Class 10" : "Class 12";
+      const value = Number(form[field]);
+      if (form[field] === "" || Number.isNaN(value))
+        return `${label} percentage is required.`;
+      if (value < 0 || value > 100) return `${label} percentage must be between 0 and 100.`;
+    }
+
+    if (form.total_experience_yrs === "" || Number.isNaN(Number(form.total_experience_yrs)))
+      return "Total years of experience is required (enter 0 if you're a fresher).";
+    if (Number(form.total_experience_yrs) < 0 || Number(form.total_experience_yrs) > 60)
+      return "Total experience must be between 0 and 60 years.";
+
+    if (skillsInput.split(",").filter((s) => s.trim()).length === 0)
+      return "Add at least one skill.";
+
+    const filled = education.filter((e) => e.degree);
+    if (filled.length === 0) return "Add at least one education entry.";
+    for (const e of filled) {
+      if (!e.institution.trim()) return "Institution is required for each education entry.";
+      if (!e.start_year || !e.end_year) return "Start and end year are required for each education entry.";
+      if (Number(e.end_year) < Number(e.start_year))
+        return "Education end year cannot be before the start year.";
+    }
+    return null;
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+
+    const validationError = validate();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
     setLoading(true);
     try {
       const payload = {
@@ -60,7 +109,9 @@ export default function CandidateProfilePage() {
         current_location: form.current_location,
         preferred_location: form.preferred_location || null,
         headline: form.headline || null,
-        total_experience_yrs: form.total_experience_yrs ? Number(form.total_experience_yrs) : null,
+        tenth_percentage: Number(form.tenth_percentage),
+        twelfth_percentage: Number(form.twelfth_percentage),
+        total_experience_yrs: Number(form.total_experience_yrs),
         self_reported_skills: skillsInput
           .split(",")
           .map((s) => s.trim())
@@ -91,7 +142,7 @@ export default function CandidateProfilePage() {
       <p className="mb-6 text-sm text-neutral-600">
         This helps us calculate an accurate match score — your location and education feed
         directly into the Education/Certification (10%) and Location (5%) components of every
-        job&apos;s match percentage.
+        job&apos;s match percentage. All fields are required except gender and headline.
       </p>
 
       <form onSubmit={handleSubmit} className="space-y-6">
@@ -99,6 +150,7 @@ export default function CandidateProfilePage() {
           <h2 className="font-medium text-neutral-800">Personal details</h2>
           <div className="grid grid-cols-2 gap-3">
             <input
+              required
               type="date"
               className="rounded-md border border-neutral-300 px-3 py-2"
               value={form.date_of_birth}
@@ -125,6 +177,7 @@ export default function CandidateProfilePage() {
             onChange={(e) => setForm({ ...form, current_location: e.target.value })}
           />
           <input
+            required
             type="text"
             placeholder="Preferred job location (or 'Remote')"
             className="w-full rounded-md border border-neutral-300 px-3 py-2"
@@ -143,21 +196,52 @@ export default function CandidateProfilePage() {
         <section className="space-y-3">
           <h2 className="font-medium text-neutral-800">Experience & skills</h2>
           <input
+            required
             type="number"
             step="0.5"
             min="0"
-            placeholder="Total years of experience"
+            max="60"
+            placeholder="Total years of experience (enter 0 if fresher)"
             className="w-full rounded-md border border-neutral-300 px-3 py-2"
             value={form.total_experience_yrs}
             onChange={(e) => setForm({ ...form, total_experience_yrs: e.target.value })}
           />
           <input
+            required
             type="text"
             placeholder="Skills, comma-separated (e.g. Python, React, SQL)"
             className="w-full rounded-md border border-neutral-300 px-3 py-2"
             value={skillsInput}
             onChange={(e) => setSkillsInput(e.target.value)}
           />
+        </section>
+
+        <section className="space-y-3">
+          <h2 className="font-medium text-neutral-800">Schooling</h2>
+          <div className="grid grid-cols-2 gap-3">
+            <input
+              required
+              type="number"
+              step="0.01"
+              min="0"
+              max="100"
+              placeholder="Class 10 percentage"
+              className="rounded-md border border-neutral-300 px-3 py-2"
+              value={form.tenth_percentage}
+              onChange={(e) => setForm({ ...form, tenth_percentage: e.target.value })}
+            />
+            <input
+              required
+              type="number"
+              step="0.01"
+              min="0"
+              max="100"
+              placeholder="Class 12 percentage"
+              className="rounded-md border border-neutral-300 px-3 py-2"
+              value={form.twelfth_percentage}
+              onChange={(e) => setForm({ ...form, twelfth_percentage: e.target.value })}
+            />
+          </div>
         </section>
 
         <section className="space-y-3">
@@ -207,6 +291,7 @@ export default function CandidateProfilePage() {
                 )}
               </div>
               <input
+                required
                 type="text"
                 placeholder="Institution"
                 className="w-full rounded-md border border-neutral-300 px-3 py-2"
@@ -215,6 +300,7 @@ export default function CandidateProfilePage() {
               />
               <div className="grid grid-cols-3 gap-2">
                 <input
+                  required
                   type="number"
                   placeholder="Start year"
                   className="rounded-md border border-neutral-300 px-3 py-2"
@@ -222,6 +308,7 @@ export default function CandidateProfilePage() {
                   onChange={(e) => updateEducation(i, "start_year", e.target.value)}
                 />
                 <input
+                  required
                   type="number"
                   placeholder="End year"
                   className="rounded-md border border-neutral-300 px-3 py-2"

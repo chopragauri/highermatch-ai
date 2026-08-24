@@ -28,6 +28,8 @@ def update_profile(
     profile.current_location = payload.current_location
     profile.preferred_location = payload.preferred_location
     profile.headline = payload.headline
+    profile.tenth_percentage = payload.tenth_percentage
+    profile.twelfth_percentage = payload.twelfth_percentage
     profile.education = [e.model_dump(mode="json") for e in payload.education]
     profile.self_reported_skills = [s.lower().strip() for s in payload.self_reported_skills]
     profile.total_experience_yrs = payload.total_experience_yrs
