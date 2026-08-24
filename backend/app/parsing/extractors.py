@@ -18,12 +18,13 @@ Both engines apply the same rule: internships/traineeships do not count as
 professional experience.
 """
 import json
-import os
 import re
 from typing import List, Optional
 
 from openai import OpenAI
 from pydantic import BaseModel, Field
+
+from .. import config
 
 from .rule_based import (  # noqa: F401 — re-exported so callers/tests keep working
     extract_certifications,
@@ -68,6 +69,31 @@ class ResumeData(BaseModel):
     )
 
 
+def _normalize_skills(skills: List[str]) -> List[str]:
+    """
+    Bring LLM skill output into the same shape the scorer compares against.
+
+    Job postings store plain lowercase tokens ("postgresql"), but the LLM echoes the
+    resume's own phrasing — "PostgreSQL/pgvector", "Java (Core)", "OOPs (Java)".
+    score_skills() only lowercases before set-intersecting, so "postgresql/pgvector"
+    never equals "postgresql" and the candidate silently loses credit for a skill they
+    demonstrably have. Splitting on separators and dropping parenthetical qualifiers
+    fixes the match without touching the scoring logic itself.
+    """
+    normalized: List[str] = []
+    for raw in skills:
+        if not raw or not raw.strip():
+            continue
+        # Drop trailing qualifiers: "Java (Core)" -> "Java"
+        cleaned = re.sub(r"\([^)]*\)", " ", raw)
+        # "PostgreSQL/pgvector" and "HTML, CSS" are each several skills
+        for part in re.split(r"[/,;|]| and ", cleaned):
+            token = part.strip().lower()
+            if token and token not in normalized:
+                normalized.append(token)
+    return normalized
+
+
 def _rule_based_parse(raw_text: str) -> ResumeData:
     """Deterministic parse — no network, no key, always available."""
     return ResumeData(
@@ -82,14 +108,13 @@ def _rule_based_parse(raw_text: str) -> ResumeData:
 def _llm_parse(raw_text: str) -> Optional[ResumeData]:
     """Returns None (never raises, never returns empty-on-failure) so the caller
     can fall back to the deterministic parser instead of silently zeroing scores."""
-    api_key = os.environ.get("OPENCODE_API_KEY", "").strip()
-    if not api_key:
+    if not config.OPENCODE_API_KEY:
         return None
 
     try:
         client = OpenAI(
-            api_key=api_key,
-            base_url=os.environ.get("OPENCODE_BASE_URL", "https://opencode.ai/zen/go/v1"),
+            api_key=config.OPENCODE_API_KEY,
+            base_url=config.OPENCODE_BASE_URL,
             timeout=_LLM_TIMEOUT_SECONDS,
         )
         schema = ResumeData.model_json_schema()
@@ -101,7 +126,7 @@ def _llm_parse(raw_text: str) -> Optional[ResumeData]:
             f"{json.dumps(schema, indent=2)}\n\nResume Text:\n{raw_text}\n"
         )
         response = client.chat.completions.create(
-            model=os.environ.get("OPENCODE_MODEL", "deepseek-v4-flash"),
+            model=config.OPENCODE_MODEL,
             messages=[
                 {
                     "role": "system",
@@ -116,7 +141,10 @@ def _llm_parse(raw_text: str) -> Optional[ResumeData]:
         content = re.sub(r"```(?:json)?\s*", "", content).strip()
         if not content:
             return None
-        return ResumeData(**json.loads(content))
+        parsed = ResumeData(**json.loads(content))
+        parsed.skills = _normalize_skills(parsed.skills)
+        parsed.project_keywords = _normalize_skills(parsed.project_keywords)
+        return parsed
     except Exception as exc:
         # Logged loudly rather than swallowed — an empty parse used to look identical
         # to a successful one, which made this failure mode invisible in the UI.

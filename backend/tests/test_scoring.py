@@ -265,3 +265,22 @@ def test_parser_falls_back_when_llm_returns_empty(monkeypatch):
     )
     assert parsed.skills
     assert parsed.experience_yrs == 4.0
+
+
+def test_llm_skill_formats_are_normalized_for_matching():
+    """The LLM echoes the resume's own phrasing ("PostgreSQL/pgvector", "Java (Core)"),
+    but job postings store plain lowercase tokens. Without normalization the set
+    intersection in score_skills misses them and the candidate loses credit for skills
+    they demonstrably have."""
+    from app.parsing.extractors import _normalize_skills
+
+    normalized = _normalize_skills(
+        ["Java (Core)", "PostgreSQL/pgvector", "HTML, CSS", "Python"]
+    )
+    assert "java" in normalized
+    assert "postgresql" in normalized
+    assert "html" in normalized and "css" in normalized
+
+    score, detail = score_skills(normalized, ["java", "postgresql", "css", "python"])
+    assert score == 100.0
+    assert detail["missing"] == []

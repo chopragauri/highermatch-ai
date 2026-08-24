@@ -30,6 +30,15 @@ CORS_ORIGINS = [
 # from Groq's fast LLM inference. Entirely optional — if unset, empty, or the call
 # fails for any reason (no network, rate limit, timeout), matching falls back to the
 # deterministic local template summary, so the app never loses its offline guarantee.
+# Optional: LLM-based resume parsing (OpenCode Go, OpenAI-compatible). When unset or
+# unreachable, parsing falls back to the deterministic rule-based parser. Read via
+# config rather than os.environ directly so importing the parser is enough to pick up
+# .env — reading os.environ at call time silently saw no key in scripts and tests that
+# hadn't imported this module first.
+OPENCODE_API_KEY = os.getenv("OPENCODE_API_KEY", "").strip()
+OPENCODE_BASE_URL = os.getenv("OPENCODE_BASE_URL", "https://opencode.ai/zen/go/v1")
+OPENCODE_MODEL = os.getenv("OPENCODE_MODEL", "deepseek-v4-flash")
+
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
 # Verify a model is live on your account before changing this — Groq deprecates and
 # rotates model IDs, and a stale ID fails with a 404 that the fallback silently
