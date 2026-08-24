@@ -22,6 +22,7 @@ type MatchBreakdown = {
   total: number;
   breakdown: Record<string, any>;
   summary: string;
+  ai_generated?: boolean;
 };
 
 export default function JobDetailPage() {
@@ -120,7 +121,13 @@ export default function JobDetailPage() {
         )}
         {match && match.total > 0 && (
           <>
-            <p className="mb-3 text-sm text-neutral-700">{match.summary}</p>
+            <p className="mb-2 text-sm text-neutral-700">{match.summary}</p>
+            {match.ai_generated && (
+              <p className="mb-3 text-xs text-neutral-400">
+                ✨ Explanation written by AI. Scores are computed locally and are not
+                affected by it.
+              </p>
+            )}
             <MatchBreakdownBars breakdown={match.breakdown} />
           </>
         )}

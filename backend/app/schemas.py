@@ -125,6 +125,7 @@ class MatchBreakdown(BaseModel):
     total: float
     breakdown: Dict[str, Any]
     summary: str
+    ai_generated: bool = False
 
 
 class JobSearchResult(BaseModel):
@@ -149,6 +150,7 @@ class ApplicationOut(BaseModel):
     job_id: UUIDStr
     match_score_total: float
     match_summary_text: str
+    ai_generated: bool = False
     status: str
     applied_at: datetime
 
@@ -168,6 +170,7 @@ class ApplicantOut(BaseModel):
     match_score_total: float
     match_score_breakdown: Dict[str, Any]
     match_summary_text: str
+    ai_generated: bool = False
     status: str
     applied_at: datetime
 
@@ -183,6 +186,7 @@ class MyApplicationOut(BaseModel):
     job_status: str
     match_score_total: float
     match_summary_text: str
+    ai_generated: bool = False
     status: str
     applied_at: datetime
 

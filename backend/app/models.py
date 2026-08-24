@@ -130,6 +130,7 @@ class Application(Base):
     match_score_total = Column(Numeric(5, 2), nullable=False)
     match_score_breakdown = Column(JSONB, nullable=False)
     match_summary_text = Column(Text, nullable=False)
+    ai_generated = Column(Boolean, nullable=False, default=False)
     status = Column(String, nullable=False, default="applied")
     applied_at = Column(DateTime(timezone=True), server_default=func.now())
 

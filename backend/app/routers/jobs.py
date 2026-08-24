@@ -208,6 +208,7 @@ def list_applicants(
             match_score_total=float(app.match_score_total),
             match_score_breakdown=app.match_score_breakdown,
             match_summary_text=app.match_summary_text,
+            ai_generated=app.ai_generated,
             status=app.status,
             applied_at=app.applied_at,
         )

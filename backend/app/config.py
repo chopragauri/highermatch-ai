@@ -1,5 +1,12 @@
 import os
 
+from dotenv import load_dotenv
+
+# Loads backend/.env into the process environment. Previously this app relied on
+# vars being exported manually in the shell before starting uvicorn — .env existed
+# only as a template nobody actually read. This is what makes a real .env file work.
+load_dotenv()
+
 JWT_SECRET = os.getenv("JWT_SECRET", "dev-secret-change-me")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "1440"))
@@ -19,3 +26,13 @@ CORS_ORIGINS = [
     for o in os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:3001").split(",")
     if o.strip()
 ]
+
+# Optional: when set, match summaries are enhanced with a natural-language rewrite
+# from Groq's fast LLM inference. Entirely optional — if unset, empty, or the call
+# fails for any reason (no network, rate limit, timeout), matching falls back to the
+# deterministic local template summary, so the app never loses its offline guarantee.
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
+# Verify a model is live on your account before changing this — Groq deprecates and
+# rotates model IDs, and a stale ID fails with a 404 that the fallback silently
+# swallows (looks like "the LLM just isn't working"). List them via client.models.list().
+GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")

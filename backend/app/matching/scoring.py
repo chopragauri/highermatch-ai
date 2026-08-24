@@ -9,6 +9,7 @@ Education+Certification 10% / Location 5%.
 from typing import Any, Dict, List, Optional, Tuple
 
 from .embeddings import cosine_similarity, get_model
+from .llm_summary import generate_llm_summary
 from .summary import generate_summary
 
 WEIGHTS = {
@@ -175,10 +176,18 @@ def score_location(
     }
 
 
-def compute_match(resume, job, candidate_location: Optional[str] = None) -> Dict[str, Any]:
+def compute_match(
+    resume, job, candidate_location: Optional[str] = None, use_llm: bool = False
+) -> Dict[str, Any]:
     """
     `resume` and `job` are SQLAlchemy model instances (models.Resume, models.JobPosting).
-    Returns {"total": float, "breakdown": dict, "summary": str}.
+    Returns {"total": float, "breakdown": dict, "summary": str, "ai_generated": bool}.
+
+    `use_llm=True` tries a Groq rewrite of the summary (falls back silently to the
+    template version on any failure). Deliberately opt-in and off by default: the
+    search endpoint calls compute_match once per open job per request, and firing an
+    LLM call for every row of a search results page would be slow and wasteful. Only
+    single-job call sites (the match-detail view, applying) pass use_llm=True.
     """
     skills_score, skills_detail = score_skills(resume.parsed_skills, job.required_skills)
     experience_score, exp_detail = score_experience(
@@ -203,6 +212,21 @@ def compute_match(resume, job, candidate_location: Optional[str] = None) -> Dict
 
     summary = generate_summary(skills_detail, exp_detail, role_detail, edu_detail, loc_detail, total)
 
+    ai_generated = False
+    if use_llm:
+        # Belt-and-braces: generate_llm_summary already swallows its own failures,
+        # but the guarantee that scoring never breaks because of the LLM is enforced
+        # here too, at the boundary, so it holds no matter how that module changes.
+        try:
+            llm_text = generate_llm_summary(
+                skills_detail, exp_detail, role_detail, edu_detail, loc_detail, total
+            )
+        except Exception:
+            llm_text = None
+        if llm_text:
+            summary = llm_text
+            ai_generated = True
+
     breakdown = {
         "skills": {"score": round(skills_score, 2), **skills_detail},
         "experience": {"score": round(experience_score, 2), **exp_detail},
@@ -212,4 +236,4 @@ def compute_match(resume, job, candidate_location: Optional[str] = None) -> Dict
         "weights": WEIGHTS,
     }
 
-    return {"total": total, "breakdown": breakdown, "summary": summary}
+    return {"total": total, "breakdown": breakdown, "summary": summary, "ai_generated": ai_generated}

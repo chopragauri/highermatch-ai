@@ -32,6 +32,15 @@ currently rely on whichever resume is already on file (the seeded demo accounts 
   using local `sentence-transformers` embeddings for the semantic pieces. Every score
   ships with a deterministic, template-generated **plain-language explanation**
   (`app/matching/summary.py`) — not just a number.
+- **Optional Groq LLM enhancement** (`app/matching/llm_summary.py`): when `GROQ_API_KEY`
+  is set, the explanation is rewritten into more natural language by Groq. **Scores are
+  never touched** — the local weighted formula stays the sole source of truth for every
+  number; the LLM only rephrases the sentence explaining them. Fully fail-safe: no key,
+  no network, a rate limit, a timeout, or a stale model ID all fall back silently to the
+  template summary, so the app still runs fully offline. Deliberately opt-in per call
+  site (`use_llm=True`) — the job-search endpoint scores every open job per request and
+  would otherwise fire one LLM call per row. Responses carry an `ai_generated` flag and
+  the UI labels AI-written explanations.
 - **Synthetic sample data** (`app/seed.py`): 1 HR account, 10 varied job postings, 6
   candidates spanning strong-fit, weak-fit, overqualified, and career-mismatch profiles,
   so match-score sorting is visibly meaningful in a demo.
@@ -82,6 +91,14 @@ python3.12 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env   # edit ALLOWED_HR_EMAIL_DOMAINS to your actual org domain(s)
 ```
+
+`.env` is loaded automatically at startup (via `python-dotenv` in `app/config.py`) — no
+need to export variables manually. To enable the optional Groq explanations, add a free
+key from [console.groq.com](https://console.groq.com) as `GROQ_API_KEY`; leave it blank
+to run fully offline. **Note:** Groq rotates model IDs, and a stale one fails with a 404
+that the fallback silently swallows (looks like "the LLM just isn't working") — verify
+`GROQ_MODEL` is live on your account with `client.models.list()` if explanations never
+show the ✨ AI label.
 
 Start Postgres (either Docker or a local install):
 

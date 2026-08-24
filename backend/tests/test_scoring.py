@@ -122,3 +122,34 @@ def test_summary_is_not_a_bare_number():
     assert len(match["summary"]) > 40
     assert "%" in match["summary"]
     assert match["summary"] != str(match["total"])
+
+
+def test_llm_disabled_by_default_uses_template_summary():
+    """compute_match must not call the LLM unless explicitly asked — the search
+    endpoint scores every open job per request and can't afford a call per row."""
+    job = make_job()
+    resume = make_resume()
+    match = compute_match(resume, job, candidate_location="Bengaluru")
+    assert match["ai_generated"] is False
+    assert "Excellent match" in match["summary"] or "Strong match" in match["summary"]
+
+
+def test_llm_failure_falls_back_to_template_summary(monkeypatch):
+    """A Groq outage/rate-limit/timeout must degrade to the local summary, never
+    raise — this is what keeps the app usable fully offline."""
+    import app.matching.scoring as scoring_module
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("simulated Groq outage")
+
+    monkeypatch.setattr(scoring_module, "generate_llm_summary", boom)
+
+    job = make_job()
+    resume = make_resume()
+    try:
+        match = compute_match(resume, job, candidate_location="Bengaluru", use_llm=True)
+    except RuntimeError:
+        raise AssertionError("compute_match must not propagate LLM errors")
+
+    assert match["ai_generated"] is False
+    assert len(match["summary"]) > 40
