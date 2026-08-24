@@ -1,0 +1,25 @@
+# Python
+backend/.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Node / Next.js
+frontend/node_modules/
+frontend/.next/
+frontend/next-env.d.ts
+frontend/tsconfig.tsbuildinfo
+
+# Env files (never commit secrets — only .env.example / .env.local.example are tracked)
+.env
+.env.local
+*.env
+!.env.example
+!.env.local.example
+
+# OS / editor
+.DS_Store
+*.swp
+
+# Logs
+*.log
