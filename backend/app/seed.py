@@ -21,6 +21,7 @@ random.seed(42)
 # Jobs without explicit min_age/max_age accept all ages.
 DEFAULT_AGE_CRITERIA = {"min_age": None, "max_age": None}
 
+JOBS = [
     dict(
         title="Backend Engineer",
         responsibilities=(
@@ -311,6 +312,8 @@ def run():
                 file_name=f"{c['full_name'].replace(' ', '_')}_resume.txt",
                 file_bytes=raw_text.encode("utf-8"),
                 file_mime="text/plain",
+                raw_text=raw_text,
+                parsed_skills=parsed_data.skills,
                 parsed_experience_yrs=parsed_data.experience_yrs,
                 parsed_education=[edu.model_dump() for edu in parsed_data.education],
                 parsed_certifications=parsed_data.certifications,
@@ -322,6 +325,11 @@ def run():
         db.commit()
         print(f"Seeded {len(JOBS)} jobs, {len(CANDIDATES)} candidates, and 1 HR user.")
         print("HR login:        hr@yahoo.com / HrPass123!")
+        print("Candidate login: priya.sharma@example.com / Candidate123! (strong fit)")
+        print("Candidate login: vikram.rao@example.com / Candidate123! (weak fit)")
+    finally:
+        db.close()
+
 
 if __name__ == "__main__":
     run()
