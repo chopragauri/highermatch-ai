@@ -233,3 +233,35 @@ def test_match_reports_age_ineligibility():
     match = compute_match(resume, job, make_profile(date_of_birth=date(2005, 1, 1)))
     assert match["age_eligible"] is False
     assert "40" in match["age_ineligible_reason"]
+
+
+def test_parser_falls_back_to_rules_when_llm_unavailable(monkeypatch):
+    """The LLM parser must never hand the scorer empty data. A previous version
+    returned skills=[]/experience=0 on any failure, which silently dropped a 99%
+    candidate to 34% while still looking like a successful parse."""
+    from app.parsing import extractors
+
+    monkeypatch.delenv("OPENCODE_API_KEY", raising=False)
+
+    parsed = extractors.extract_resume_data(
+        "Backend Engineer\n"
+        "Skills: Python, FastAPI, PostgreSQL, Docker\n"
+        "Experience\n"
+        "TechCorp 2020 - 2024\n"
+        "Senior Backend Engineer\n"
+    )
+    assert parsed.skills, "fallback must still extract skills"
+    assert parsed.experience_yrs == 4.0
+
+
+def test_parser_falls_back_when_llm_returns_empty(monkeypatch):
+    """A structurally valid but empty LLM response is treated as a failure too."""
+    from app.parsing import extractors
+
+    monkeypatch.setattr(extractors, "_llm_parse", lambda _text: extractors.ResumeData())
+
+    parsed = extractors.extract_resume_data(
+        "Skills: Python, Docker\nExperience\nAcme 2019 - 2023\nEngineer\n"
+    )
+    assert parsed.skills
+    assert parsed.experience_yrs == 4.0

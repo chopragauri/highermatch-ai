@@ -25,7 +25,12 @@ not deployed anywhere.
   role/skill/location/experience filters, all combinable, and **defaults to sorting by
   highest AI match % first** (`sort=match_desc`).
 - **Resume parsing**: PDF/DOCX → skills, experience years, education, certifications,
-  project keywords, all via `app/parsing/`, no LLM calls.
+  project keywords, via `app/parsing/`. Two engines: an **LLM parse** (OpenCode Go,
+  set `OPENCODE_API_KEY`) with the deterministic **rule-based parser**
+  (`app/parsing/rule_based.py`) as the fallback. With no key, no network, or a provider
+  outage it degrades to regex rather than returning empty data — an earlier version
+  returned empty on failure, which silently dropped a 99% candidate to 34% while still
+  looking like a successful parse. Both engines exclude internships from experience.
 - **AI matching engine** (`app/matching/`): the exact weighted formula from the brief
   (Skills 40% / Experience 25% / Role Responsibility 20% / Education 10% / Location 5%),
   using local `sentence-transformers` embeddings for the semantic pieces.
