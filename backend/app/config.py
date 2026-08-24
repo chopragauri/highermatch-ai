@@ -1,5 +1,4 @@
 import os
-
 from dotenv import load_dotenv
 
 # Loads backend/.env into the process environment. Previously this app relied on

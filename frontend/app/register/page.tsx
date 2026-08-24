@@ -13,6 +13,24 @@ export default function RegisterPage() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+
+    // Frontend validation
+    if (!form.full_name.trim()) {
+      return setError("Full name is required.");
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+      return setError("Please enter a valid email address.");
+    }
+    if (role === "hr" && !form.email.toLowerCase().endsWith("@yahoo.com")) {
+      return setError("HR registration requires a @yahoo.com email address.");
+    }
+    if (role === "candidate" && !form.phone.trim()) {
+      return setError("Phone number is required for candidates.");
+    }
+    if (form.password.length < 8) {
+      return setError("Password must be at least 8 characters long.");
+    }
+
     setLoading(true);
     try {
       const payload: Record<string, string> = { ...form, role };

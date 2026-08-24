@@ -4,6 +4,22 @@ import pdfplumber
 from docx import Document
 
 
+def clean_ligatures(text: str) -> str:
+    import re
+    replacements = {
+        "(cid:27)": "ff",
+        "(cid:28)": "fi",
+        "(cid:29)": "fl",
+        "(cid:30)": "ffi",
+        "(cid:31)": "ffl",
+    }
+    for cid, rep in replacements.items():
+        text = text.replace(cid, rep)
+    # Strip any remaining unmapped cids
+    text = re.sub(r"\(cid:\d+\)", "", text)
+    return text
+
+
 def extract_text_from_pdf(file_bytes: bytes) -> str:
     text_parts = []
     try:
@@ -15,7 +31,7 @@ def extract_text_from_pdf(file_bytes: bytes) -> str:
 
     text = "\n".join(text_parts).strip()
     if text:
-        return text
+        return clean_ligatures(text)
 
     # Fallback: some PDFs pdfplumber can't parse cleanly still work with PyPDF2.
     try:
@@ -26,7 +42,7 @@ def extract_text_from_pdf(file_bytes: bytes) -> str:
     except Exception:
         pass
 
-    return "\n".join(text_parts).strip()
+    return clean_ligatures("\n".join(text_parts).strip())
 
 
 def extract_text_from_docx(file_bytes: bytes) -> str:

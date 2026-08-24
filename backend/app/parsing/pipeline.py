@@ -5,13 +5,7 @@ import numpy as np
 
 from ..matching.embeddings import embed_text
 from .extract import extract_text
-from .extractors import (
-    extract_certifications,
-    extract_education,
-    extract_experience_years,
-    extract_project_keywords,
-    extract_skills,
-)
+from .extractors import extract_resume_data
 
 
 @dataclass
@@ -27,12 +21,15 @@ class ParsedResume:
 
 def parse_resume(file_bytes: bytes, mime: str) -> ParsedResume:
     raw_text = extract_text(file_bytes, mime)
+    parsed_data = extract_resume_data(raw_text)
+    
     return ParsedResume(
         raw_text=raw_text,
-        skills=extract_skills(raw_text),
-        experience_yrs=extract_experience_years(raw_text),
-        education=extract_education(raw_text),
-        certifications=extract_certifications(raw_text),
-        project_keywords=extract_project_keywords(raw_text),
+        skills=parsed_data.skills,
+        experience_yrs=parsed_data.experience_yrs,
+        education=[edu.model_dump() for edu in parsed_data.education],
+        certifications=parsed_data.certifications,
+        project_keywords=parsed_data.project_keywords,
         embedding=embed_text(raw_text),
     )
+
