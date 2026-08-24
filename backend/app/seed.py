@@ -14,13 +14,7 @@ from datetime import date
 from . import models, security
 from .database import Base, SessionLocal, engine
 from .matching.embeddings import embed_text
-from .parsing.extractors import (
-    extract_certifications,
-    extract_education,
-    extract_experience_years,
-    extract_project_keywords,
-    extract_skills,
-)
+from .parsing.extractors import extract_resume_data
 
 random.seed(42)
 
@@ -311,17 +305,19 @@ def run():
             ))
 
             raw_text = c["resume_text"]
+            parsed_data = extract_resume_data(raw_text)
+            
             db.add(models.Resume(
                 candidate_user_id=user.id,
                 file_name=f"{c['full_name'].replace(' ', '_')}_resume.txt",
                 file_bytes=raw_text.encode("utf-8"),
                 file_mime="text/plain",
                 raw_text=raw_text,
-                parsed_skills=extract_skills(raw_text),
-                parsed_experience_yrs=extract_experience_years(raw_text),
-                parsed_education=extract_education(raw_text),
-                parsed_certifications=extract_certifications(raw_text),
-                parsed_projects_keywords=extract_project_keywords(raw_text),
+                parsed_skills=parsed_data.skills,
+                parsed_experience_yrs=parsed_data.experience_yrs,
+                parsed_education=[edu.model_dump() for edu in parsed_data.education],
+                parsed_certifications=parsed_data.certifications,
+                parsed_projects_keywords=parsed_data.project_keywords,
                 resume_embedding=embed_text(raw_text).tolist(),
                 is_active=True,
             ))
