@@ -12,6 +12,15 @@ export default function LoginPage() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+
+    // Frontend validation
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+      return setError("Please enter a valid email address.");
+    }
+    if (!form.password) {
+      return setError("Password is required.");
+    }
+
     setLoading(true);
     try {
       const data = await apiFetch("/auth/login", {
